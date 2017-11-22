@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <netdb.h>
 #include "duckchat.h"
 #include "raw.h"
 
@@ -19,7 +20,7 @@
 
 struct aServer{
 	sockaddr_in srv;
-}
+};
 
 struct aUser{
 	char username[32];
@@ -30,19 +31,18 @@ struct aChannel{
 	char channelName[32];
 	int subscribedNum;
 	aUser* subscribedClients[100]; //max of 100 users per channel
-	aServer* adjServers[MAX_SERVER] //to keep track of the adjacent servers for a particular channel
+	aServer* adjServers[MAX_SERVER]; //to keep track of the adjacent servers for a particular channel
 };
 
 aUser* theUsers[MAX_USER]; // keeping track of users and their channels, server supports 1000 users
 aChannel* theChannels[MAX_CHANNEL]; // keeping track of channels and users on them
 aServer* theServers[MAX_SERVER]; //keeping track of the adjacent servers
-
 int userIndex = 0;
 int channelIndex = 0;
 
-////////////////////////////////////////////////////// HELPER FUNCTIONS //////////////////////////////////////////////////////
+/////////////////////////////////////////  HELPER FUNCTIONS  /////////////////////////////////////////
 
-int isSame( sockaddr_in ad1, sockaddr_in ad2){
+int isSame(sockaddr_in ad1, sockaddr_in ad2){
 	if(ad1.sin_addr.s_addr == ad2.sin_addr.s_addr && ad1.sin_port == ad2.sin_port){
 		return 1;
 	}
@@ -92,94 +92,72 @@ int userInChannel(aUser* checkUser, aChannel* channel){
 }
 
 
-//////////////////////////////////////////////////////////  MAIN  //////////////////////////////////////////////////////////
+//////////////////////////////////////////  MAIN FUNCTION  //////////////////////////////////////////
 
 
 int main(int argc, char *argv[]){
 	raw_mode();
-	atexit(cooked_mode);	
-	
+	atexit(cooked_mode);
 	struct sockaddr_in serv_addr;
 	struct sockaddr_in cli_addr;
-
 	int sockfd;
 	socklen_t clilen;
-
 	char buffer[256];
 	int n;
 	int i = argc;
-
 	if (( sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		perror("server: can’t open stream socket");
 	}
-
 	bzero((char *)&serv_addr, sizeof(serv_addr)); // set serv_addr to all 0s
-
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); /* host to network long*/
+    struct hostent *he;
+    char host[CHANNEL_MAX];
+    strcpy(host, argv[1]);
+    if ((he = gethostbyname(host)) == NULL) {
+        fprintf(stderr, "\nclient: error resolving hostname\n>");
+        exit(1);
+    }
+    serv_addr.sin_family = AF_INET;
+	memcpy(&serv_addr.sin_addr.s_addr, he->h_addr_list[0], he->h_length); /* host to network long*/
 	serv_addr.sin_port = htons(atoi(argv[2])); // port number that user specifies
-
 	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
 		perror("server: can’t bind local address");
-	}	
-
+	}
 	listen(sockfd, 5);
-
 	clilen = sizeof(cli_addr);
-
 	aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
 	strcpy(newChannel -> channelName, "Common");
 	newChannel -> subscribedNum = 0;
 	theChannels[channelIndex]= newChannel;
 	channelIndex++;
-
 	while(1){
-
 		bzero(buffer,256);
-		
 		if((n = recvfrom(sockfd,buffer,255, 0,(struct sockaddr *)&cli_addr, &clilen)) > -1){
-
 			if (n < 0){
 				perror("ERROR reading from socket");
 			}
-
 			request_t reqtype = ((request*) buffer) -> req_type;
-
 			//printf("\nthe request type is %d\n",  reqtype);
 			printf("\n");
-
 			switch(reqtype){
-
 				case 0:{ //login
-
 					printf("LOGIN HANDLER\n");
-
 					aUser* newUser = (aUser*)malloc(sizeof(aUser));
-
 					strcpy(newUser -> username, ((request_login*)buffer)-> req_username);
-					newUser -> cli = cli_addr;
-
+                    newUser -> cli = cli_addr;
 					theUsers[userIndex] = newUser;
 					userIndex++;
 					break;
 				}
-                
 				case 1:{ //logout
-					
 					printf("LOGOUT HANDLER\n");
-					
 					aUser* logoutUser = findUser(&cli_addr);
 					int removeIndex = findIndexUsers(logoutUser);
-					
 					int i;
-
 					// reindex theUsers[] for logoutUser removal
 					for(i = removeIndex; i < userIndex - 1; i++){
 						 theUsers[i] = theUsers[i + 1];
 					}
-
-				   userIndex --; // one less user exists
-		
+                    userIndex --; // one less user exists
 					int a;
 					int b;
 					int c;
@@ -204,28 +182,20 @@ int main(int argc, char *argv[]){
 					free(logoutUser);
 					break;
 				}
-		
 				case 2:{ //join
-
 					printf("JOIN HANDLER\n");
-
 					char channel[32];
 					strcpy(channel,((request_join*)buffer)-> req_channel);
-
 					int i;
 					int channelExists = 0;
-
 					text_error er;
 					er.txt_type = TXT_ERROR;
-					
 					aUser* joinedUser = findUser(&cli_addr);
-	
 					if(joinedUser == NULL){ // a user that does not exist tries to join a channel
 						strcpy(er.txt_error, "You are not logged in, restart program");	
-						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
+						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
 						break;
 					}
-
 					for(i = 0; i < channelIndex; i++){
 						//check if the channel exists in theChannels (if not create one)
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){
@@ -237,14 +207,13 @@ int main(int argc, char *argv[]){
 							} 
 							printf("a channel that exists was found: %s\n", theChannels[i] -> channelName);
 							theChannels[i] -> subscribedClients[theChannels[i] -> subscribedNum] = joinedUser;
-							printf("user %s joined \n",theChannels[i] -> subscribedClients[theChannels[i] -> subscribedNum] -> username);							
+                            printf("user %s joined \n",theChannels[i] -> subscribedClients[theChannels[i] -> subscribedNum] -> username);
 							theChannels[i] -> subscribedNum += 1;
 							printf("total subscribed to this channel is %d\n", theChannels[i] -> subscribedNum); 
 							channelExists = 1;
 							break;
 						}
 					}
-					
 					// channel does not exist create one	
 					if(!channelExists){					
 					aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
@@ -258,27 +227,20 @@ int main(int argc, char *argv[]){
 					}
 					break;
 				}
-                
 				case 3:{ //leave
-			
 					printf("LEAVE HANDLER\n");
 					text_error er;
-					er.txt_type = TXT_ERROR;
-
+                    er.txt_type = TXT_ERROR;
 					aUser* leaveUser = findUser(&cli_addr);;
-	
 					if(leaveUser == NULL){ // a user that does not exist tries to join a channel
 						strcpy(er.txt_error, "You are not logged in, restart program");	
-						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
+						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
 						break;
 					}
-
 					char channel[32];
-					strcpy(channel,((request_leave*)buffer)-> req_channel);		
-
+					strcpy(channel,((request_leave*)buffer)-> req_channel);
 					int notFound = 1;	
-					int noUserExists = 1;	
-
+					int noUserExists = 1;
 					int a;
 					int b;
 					int c;
@@ -290,11 +252,9 @@ int main(int argc, char *argv[]){
 							for(b = 0; b < theChannels[a] -> subscribedNum ; b++){
 								// the logout user is on this channel
 								if(isSame(theChannels[a] -> subscribedClients[b] -> cli, leaveUser-> cli)){
-
 									printf("user %s found on channel %s\n", theChannels[a] -> channelName, leaveUser-> username);				
 									notFound = 0; // found a match no error message needed
 									noUserExists = 0;// a matched user exists no error message needed
-									
 									// need to reindex the users on channel 
 									for(c = b; c < ((theChannels[a] -> subscribedNum)); c++){
 										printf("switching %s\n", theChannels[a] -> subscribedClients[b]-> username);
@@ -309,7 +269,7 @@ int main(int argc, char *argv[]){
 							if(noUserExists){
 								strcpy(er.txt_error, "User does not exist on the channel");	
 								notFound = 0;
-								sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
+								sendto(sockfd,&er, sizeof(er), 0, (struct sockaddr *)&cli_addr, clilen);
 								break; 
 							}
 						}
@@ -317,35 +277,29 @@ int main(int argc, char *argv[]){
 					if(notFound){
 						strcpy(er.txt_error, "Sorry that channel does not exist");	
 						if((n= sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen ) < -1)){
-											printf("ERROR writing to socket\n");			
+                            printf("ERROR writing to socket\n");
 						break;
 						}
 					}
 					break;
 				}
-
-				case 4:{ // request say
-
+				case 4:{ //say
 					printf("SAY HANDLER\n");
 					char channel[32];
 					char message[64];
-
 					aUser* userSaid = findUser(&cli_addr);
 					text_error er;
 					er.txt_type = TXT_ERROR;
-
 					if(userSaid == NULL){ // a user that does not exist tries to join a channel
 						strcpy(er.txt_error, "You are not logged in, restart program");	
-						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
+						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
 						break;
 					}
-
 					printf("the user who is sending request is %s\n" , userSaid -> username);
 					memcpy(channel,((request_say*)buffer)-> req_channel, 32);
 					printf("the channel written to is before loop: %s\n", channel);
 					memcpy(message,((request_say*)buffer)-> req_text, 64);
 					printf("the message written: %s\n", message);
-					
 					int i;
 					for(i = 0; i < channelIndex; i++){
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){
@@ -353,45 +307,37 @@ int main(int argc, char *argv[]){
 							int j;
 							printf("the number users on this channel is %d\n",theChannels[i] -> subscribedNum );
 							for(j = 0; j< (theChannels[i] -> subscribedNum); j++){
-									text_say sendingSay;
-									sendingSay.txt_type = 0;
-									strcpy(sendingSay.txt_channel, channel);
-									strcpy(sendingSay.txt_username, userSaid -> username);
-									strcpy(sendingSay.txt_text, message);
-
-									int cliLen = sizeof(theChannels[i]->subscribedClients[j]->cli);
-
-									if((n= sendto(sockfd,&sendingSay, sizeof(sendingSay), 0,(struct sockaddr *)&theChannels[i]->subscribedClients[j]->cli, cliLen ) < -1)){
-										printf("ERROR writing to socket\n");
-									}
+                                text_say sendingSay;
+                                sendingSay.txt_type = 0;
+                                strcpy(sendingSay.txt_channel, channel);
+                                strcpy(sendingSay.txt_username, userSaid -> username);
+                                strcpy(sendingSay.txt_text, message);
+                                int cliLen = sizeof(theChannels[i]->subscribedClients[j]->cli);
+                                if((n= sendto(sockfd,&sendingSay, sizeof(sendingSay), 0,(struct sockaddr *)&theChannels[i]->subscribedClients[j]->cli, cliLen ) < -1)){
+                                    printf("ERROR writing to socket\n");
+                                }
 							}
 						}
 					}
 					break;
 				}
-
-                case 5:{ // list
+                case 5:{ //list
 					printf("LIST HANDLER\n");
-					
 					aUser* userList = findUser(&cli_addr);
 					text_error er;
 					er.txt_type = TXT_ERROR;
-
 					if(userList == NULL){ // a user that does not exist tries to join a channel
 						strcpy(er.txt_error, "You are not logged in, restart program");	
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
 						break;
 					}
-
 					struct text_list *sendingList = (struct text_list *) malloc(sizeof(text_list) + sizeof(channel_info) * channelIndex);
 					sendingList->txt_type = TXT_LIST;
 					sendingList->txt_nchannels = channelIndex;
-					
 					for(i = 0; i < channelIndex; i++){
 						strcpy(((sendingList->txt_channels)+i)->ch_channel, theChannels[i] -> channelName);
 						printf("channel to be listed %s\n", theChannels[i] -> channelName);
 					}
-					
 					int sizeLen = sizeof(text_list) + sizeof(channel_info) * channelIndex;
 					if((n= sendto(sockfd,sendingList, sizeLen, 0,(struct sockaddr *)&cli_addr, clilen ) < -1)){
 										printf("ERROR writing to socket\n");
@@ -399,19 +345,15 @@ int main(int argc, char *argv[]){
 					free(sendingList);	
 					break;		
 				}
-
-            case 6:{ // who
+                case 6:{ //who
 					printf("WHO HANDLER\n");
 					struct text_who* whoSend;
 					char whoChannel[32];
 					strcpy(whoChannel, ((request_who*)buffer) -> req_channel);
-
 					int foundChannel = 0;
-	
 					aUser* userWho = findUser(&cli_addr);
 					text_error er;
 					er.txt_type = TXT_ERROR;
-
 					if(userWho == NULL){ // a user that does not exist tries to join a channel
 						strcpy(er.txt_error, "You are not logged in, restart program");	
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
@@ -448,18 +390,15 @@ int main(int argc, char *argv[]){
 					free(whoSend);
 					break;	
 				}
-
-				case 7:{ // S2S join
+				case 7:{ //S2S join
 					printf("S2s join HANDLER\n");
 					
 				}
-
-				case 8:{ // S2S say
+				case 8:{ //S2S say
 					printf("S2s say HANDLER\n");
 					
 				}
-
-				case 9:{ // S2S leave
+				case 9:{ //S2S leave
 					printf("S2s leave HANDLER\n");
 					
 				}
@@ -472,6 +411,3 @@ int main(int argc, char *argv[]){
 	close(sockfd);
 	return 0;
 }
-
-
-		
