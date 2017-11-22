@@ -15,6 +15,11 @@
 
 #define MAX_USER 1000
 #define MAX_CHANNEL 1000
+#define MAX_SERVER 1000
+
+struct aServer{
+	sockaddr_in srv;
+}
 
 struct aUser{
 	char username[32];
@@ -29,6 +34,7 @@ struct aChannel{
 
 aUser* theUsers[MAX_USER]; // keeping track of users and their channels, server supports 1000 users
 aChannel* theChannels[MAX_CHANNEL]; // keeping track of channels and users on them
+aServer* theServers[MAX_SERVER]; //keeping track of the adjacent servers
 
 int userIndex = 0;
 int channelIndex = 0;
@@ -393,7 +399,7 @@ int main(int argc, char *argv[]){
 					break;		
 				}
 
-                case 6:{ // who
+            case 6:{ // who
 					printf("WHO HANDLER\n");
 					struct text_who* whoSend;
 					char whoChannel[32];
@@ -440,6 +446,21 @@ int main(int argc, char *argv[]){
 					}
 					free(whoSend);
 					break;	
+				}
+
+				case 7:{ // S2S join
+					printf("S2s join HANDLER\n");
+					
+				}
+
+				case 8:{ // S2S say
+					printf("S2s say HANDLER\n");
+					
+				}
+
+				case 9:{ // S2S leave
+					printf("S2s leave HANDLER\n");
+					
 				}
 				default:{
 					printf("Invalid packet was sent\n");
