@@ -9,6 +9,7 @@
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
 #include "duckchat.h"
@@ -17,9 +18,11 @@
 #define MAX_USER 1000
 #define MAX_CHANNEL 1000
 #define MAX_SERVER 1000
+#define MAX_MESSAGE 1000
 
 struct aServer{
-	sockaddr_in srv;
+    char srv_name[64];
+    sockaddr_in srv;
 };
 
 struct aUser{
@@ -31,12 +34,16 @@ struct aChannel{
 	char channelName[32];
 	int subscribedNum;
 	aUser* subscribedClients[100]; //max of 100 users per channel
-	aServer* adjServers[MAX_SERVER]; //to keep track of the adjacent servers for a particular channel
+	aServer* adjServers[MAX_SERVER]; //keep track of adjacent servers for a particular channel
 };
 
-aUser* theUsers[MAX_USER]; // keeping track of users and their channels, server supports 1000 users
-aChannel* theChannels[MAX_CHANNEL]; // keeping track of channels and users on them
-aServer* theServers[MAX_SERVER]; //keeping track of the adjacent servers
+aUser* theUsers[MAX_USER]; //keep track of users and their channels, server supports 1000 users
+aChannel* theChannels[MAX_CHANNEL]; //keep track of channels and users on them
+aServer* theServers[MAX_SERVER]; //keep track of adjacent servers
+
+char this_srv_name[64];
+char msg_nums[MAX_MESSAGE]; //keep track of unique message number identifiers
+
 int userIndex = 0;
 int channelIndex = 0;
 
@@ -104,32 +111,85 @@ int main(int argc, char *argv[]){
 	socklen_t clilen;
 	char buffer[256];
 	int n;
-	int i = argc;
-	if (( sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		perror("server: can’t open stream socket");
 	}
 	bzero((char *)&serv_addr, sizeof(serv_addr)); // set serv_addr to all 0s
-    struct hostent *he;
-    char host[CHANNEL_MAX];
-    strcpy(host, argv[1]);
-    if ((he = gethostbyname(host)) == NULL) {
-        fprintf(stderr, "\nclient: error resolving hostname\n>");
-        exit(1);
+    // NEW:
+    int i = argc;
+    if (i<3) {
+        printf("usage: ./server domain_name port_num\n");
     }
+    // get ip address from the host name
+    struct hostent *he;
+    char host[64];
+    strcpy(host, argv[1]);
+    if ((he = gethostbyname(host)) == NULL){
+        perror("server: error resolving hostname");
+    }
+    struct in_addr **serv_list;
+    serv_list = (struct in_addr**) he->h_addr_list;
+    // set up this server's "name" for printing purposes
+    char srv_name[64];
+    strcat(srv_name, inet_ntoa(*serv_list[0]));
+    strcat(srv_name, ":");
+    strcat(srv_name, argv[2]);
+    strcpy(this_srv_name, srv_name);
+    // set up this server's sockaddr_in
     serv_addr.sin_family = AF_INET;
-	memcpy(&serv_addr.sin_addr.s_addr, he->h_addr_list[0], he->h_length); /* host to network long*/
+	memcpy(&serv_addr.sin_addr.s_addr, serv_list[0], he->h_length);
 	serv_addr.sin_port = htons(atoi(argv[2])); // port number that user specifies
 	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
 		perror("server: can’t bind local address");
 	}
+    // initialize the unique message ids array with false numbers
+    int m;
+    for (m = 0; m < MAX_MESSAGE; m++){
+        msg_nums[m] = -1;
+    }
+    // normal work
 	listen(sockfd, 5);
 	clilen = sizeof(cli_addr);
 	aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
 	strcpy(newChannel -> channelName, "Common");
 	newChannel -> subscribedNum = 0;
 	theChannels[channelIndex]= newChannel;
-	channelIndex++;
-	while(1){
+	// Parse the variable length input (i=argc)
+    if (i > 3) {
+        if (((i-3)%2) != 0){
+            printf("number of command line server descripting arguments must be of even length\n");
+        }
+        else{
+            int s;
+            // iterate through the command line to find neighbor servers
+            for (s = 3; s < argc; s++){
+                char n_host_name[64];
+                strcpy(n_host_name, argv[s]);
+                if ((he = gethostbyname(n_host_name)) == NULL){
+                    perror("server: error resolving hostname");
+                }
+                struct in_addr **n_serv_list;
+                n_serv_list = (struct in_addr**) he->h_addr_list;
+                // set up neighbor server's name
+                char n_srv_name[64];
+                strcat(n_srv_name, inet_ntoa(*n_serv_list[0]));
+                strcat(n_srv_name, ":");
+                strcat(n_srv_name, argv[s+1]);
+                aServer* n_server = (aServer*)malloc(sizeof(aServer));
+                strcpy(n_server -> srv_name, n_srv_name);
+                // set up neighbor server's port sockaddr_in
+                n_server->srv.sin_family = AF_INET;
+                n_server->srv.sin_port = htons(atoi(argv[s+1]));
+                memcpy(&n_server->srv.sin_addr.s_addr, n_serv_list[0], he->h_length);
+                // put it in theServers
+                theServers[s-3] = n_server;
+                // put it in theChannels[channelIndex], which is still 0
+                theChannels[channelIndex]->adjServers[s-3] = n_server;
+            }
+        }
+    }
+    channelIndex++;
+    while(1){
 		bzero(buffer,256);
 		if((n = recvfrom(sockfd,buffer,255, 0,(struct sockaddr *)&cli_addr, &clilen)) > -1){
 			if (n < 0){
