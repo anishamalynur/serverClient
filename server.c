@@ -1,4 +1,3 @@
-
 //  Inspiration drawn from:
 //      socket programming:  https://www.cs.rutgers.edu/~pxk/417/notes/sockets/udp.html
 //      get ip addr from channel: http://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
@@ -81,7 +80,6 @@ int userInChannel(aUser* checkUser, aChannel* channel){
 		if(isSame(checkUser-> cli, channel->subscribedClients[i] ->cli)){
 			return 1;
 		}
-
 	}
 	return 0;
 }
@@ -145,7 +143,7 @@ int main(int argc, char *argv[]){
 
 			switch(reqtype){
 
-				case 0:{//login
+				case 0:{ //login
 
 					printf("LOGIN HANDLER\n");
 
@@ -156,9 +154,9 @@ int main(int argc, char *argv[]){
 
 					theUsers[userIndex] = newUser;
 					userIndex++;
-
 					break;
-				} 
+				}
+                
 				case 1:{ //logout
 					
 					printf("LOGOUT HANDLER\n");
@@ -189,7 +187,6 @@ int main(int argc, char *argv[]){
 									printf("removing %s\n", theChannels[a] -> subscribedClients[b]-> username);
 	 								theChannels[a] -> subscribedClients[c] = theChannels[a] -> subscribedClients[c +1];	
 								}
-
 								// if the channel has 0 users it gets freed
 								theChannels[a] -> subscribedNum -= 1;
 								removeChannelReindex(theChannels[a], a);
@@ -200,7 +197,6 @@ int main(int argc, char *argv[]){
 					free(logoutUser);
 					break;
 				}
-				
 		
 				case 2:{ //join
 
@@ -222,7 +218,6 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
 						break;
 					}
-					
 
 					for(i = 0; i < channelIndex; i++){
 						//check if the channel exists in theChannels (if not create one)
@@ -241,7 +236,6 @@ int main(int argc, char *argv[]){
 							channelExists = 1;
 							break;
 						}
-						
 					}
 					
 					// channel does not exist create one	
@@ -255,10 +249,10 @@ int main(int argc, char *argv[]){
 					theChannels[channelIndex]= newChannel;
 					channelIndex++;
 					}
-
 					break;
 				}
-				case 3:{//leave
+                
+				case 3:{ //leave
 			
 					printf("LEAVE HANDLER\n");
 					text_error er;
@@ -323,7 +317,7 @@ int main(int argc, char *argv[]){
 					break;
 				}
 
-				case 4:{// request say
+				case 4:{ // request say
 
 					printf("SAY HANDLER\n");
 					char channel[32];
@@ -364,15 +358,12 @@ int main(int argc, char *argv[]){
 										printf("ERROR writing to socket\n");
 									}
 							}
-			
 						}
-					
 					}
 					break;
 				}
 
-				case 5: //list 
-				{	
+                case 5:{ // list
 					printf("LIST HANDLER\n");
 					
 					aUser* userList = findUser(&cli_addr);
@@ -384,7 +375,6 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
 						break;
 					}
-				
 
 					struct text_list *sendingList = (struct text_list *) malloc(sizeof(text_list) + sizeof(channel_info) * channelIndex);
 					sendingList->txt_type = TXT_LIST;
@@ -403,8 +393,7 @@ int main(int argc, char *argv[]){
 					break;		
 				}
 
-				case 6: //who
-				{	
+                case 6:{ // who
 					printf("WHO HANDLER\n");
 					struct text_who* whoSend;
 					char whoChannel[32];
@@ -421,11 +410,8 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
 						break;
 					}
-				
 					int i;
-				
 					for(i = 0; i < channelIndex ; i++){
-
 							if(strcmp(theChannels[i] -> channelName, whoChannel) == 0){
 								int UsersOnChannel = theChannels[i] -> subscribedNum;
 								whoSend = (struct text_who *) malloc(sizeof(text_who) + sizeof(user_info) * UsersOnChannel);
@@ -441,7 +427,6 @@ int main(int argc, char *argv[]){
 								foundChannel = 1;
 							}
 					}
-					
 					if(!foundChannel){
 							strcpy(er.txt_error, "Sorry that channel does not exist");	
 							if((n= sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen ) < -1)){
@@ -456,13 +441,9 @@ int main(int argc, char *argv[]){
 					free(whoSend);
 					break;	
 				}
-
-				default:
-				{
+				default:{
 					printf("Invalid packet was sent\n");
-
 				}
-
 			}
 		}
 	}
