@@ -30,6 +30,7 @@ struct aChannel{
 	char channelName[32];
 	int subscribedNum;
 	aUser* subscribedClients[100]; //max of 100 users per channel
+	aServer* adjServers[MAX_SERVER] //to keep track of the adjacent servers for a particular channel
 };
 
 aUser* theUsers[MAX_USER]; // keeping track of users and their channels, server supports 1000 users
