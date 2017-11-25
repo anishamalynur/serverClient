@@ -19,9 +19,10 @@
 #define MAX_CHANNEL 1000
 #define MAX_SERVER 1000
 #define MAX_MESSAGE 1000
+#define MAX_HOSTNAME 100
 
 struct aServer{
-    char srv_name[64];
+    char srv_name[MAX_HOSTNAME+32]; //keep track of ip:port
     sockaddr_in srv;
 };
 
@@ -41,11 +42,13 @@ aUser* theUsers[MAX_USER]; //keep track of users and their channels, server supp
 aChannel* theChannels[MAX_CHANNEL]; //keep track of channels and users on them
 aServer* theServers[MAX_SERVER]; //keep track of adjacent servers
 
-char this_srv_name[64];
+aServer *this_srv;
+int sockfd;
 char msg_nums[MAX_MESSAGE]; //keep track of unique message number identifiers
 
 int userIndex = 0;
 int channelIndex = 0;
+int serverIndex = 0;
 
 /////////////////////////////////////////  HELPER FUNCTIONS  /////////////////////////////////////////
 
@@ -65,7 +68,18 @@ aUser* findUser(sockaddr_in* client){
 		}
 	}
 	return NULL;	
-}	
+}
+
+aServer* findServer(sockaddr_in* server){
+    int i;
+    for(i = 0; i < serverIndex; i++){
+        if(theServers[i] ->srv.sin_addr.s_addr == server->sin_addr.s_addr && theServers[i]->srv.sin_port == server->sin_port){
+            //printf( "found user!! %s\n", theUsers[i] -> username);
+            return theServers[i];
+        }
+    }
+    return NULL;
+}
 
 int findIndexUsers(aUser* user){
 	int i;
@@ -98,6 +112,38 @@ int userInChannel(aUser* checkUser, aChannel* channel){
 	return 0;
 }
 
+int serverInChannel(aServer* checkServer, aChannel* channel){
+    int i;
+    for (i = 0; i < channel -> subscribedNum; i++){
+        if(isSame(checkServer-> srv, channel->adjServers[i] ->srv)){
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void broadcast_join_message(aServer* origin_server, aChannel* channel) {
+    struct request_join join_msg;
+    join_msg.req_type = REQ_JOIN;
+    strcpy(join_msg.req_channel, channel->channelName);
+    //if (server_iter == servers.end()) { cout << "no servers" << endl; }
+    int i;
+    for(i=0; i<serverIndex; i++){
+        if (channel->adjServers[i]->srv_name != origin_server->srv_name) {
+            if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&origin_server->srv, sizeof(origin_server->srv)) < 0 ) {
+                perror("Message failed\n");
+            }
+            else {
+                printf("%s <receiving srv_name> send s2s_join %s\n", origin_server->srv_name, channel->channelName);
+            }
+        }
+        else {
+            //Not forwarding back to sender
+        }
+    }
+}
+
+
 
 //////////////////////////////////////////  MAIN FUNCTION  //////////////////////////////////////////
 
@@ -107,7 +153,6 @@ int main(int argc, char *argv[]){
 	atexit(cooked_mode);
 	struct sockaddr_in serv_addr;
 	struct sockaddr_in cli_addr;
-	int sockfd;
 	socklen_t clilen;
 	char buffer[256];
 	int n;
@@ -115,14 +160,13 @@ int main(int argc, char *argv[]){
 		perror("server: can’t open stream socket");
 	}
 	bzero((char *)&serv_addr, sizeof(serv_addr)); // set serv_addr to all 0s
-    // NEW:
-    int i = argc;
-    if (i<3) {
+    // NEW starts here
+    if (argc<3) {
         printf("usage: ./server domain_name port_num\n");
     }
     // get ip address from the host name
     struct hostent *he;
-    char host[64];
+    char host[MAX_HOSTNAME];
     strcpy(host, argv[1]);
     if ((he = gethostbyname(host)) == NULL){
         perror("server: error resolving hostname");
@@ -130,11 +174,13 @@ int main(int argc, char *argv[]){
     struct in_addr **serv_list;
     serv_list = (struct in_addr**) he->h_addr_list;
     // set up this server's "name" for printing purposes
-    char srv_name[64];
-    strcat(srv_name, inet_ntoa(*serv_list[0]));
-    strcat(srv_name, ":");
-    strcat(srv_name, argv[2]);
-    strcpy(this_srv_name, srv_name);
+    this_srv = (aServer*)malloc(sizeof(aServer));
+    serverIndex++;
+    char serv_name[MAX_HOSTNAME];
+    strcat(serv_name, inet_ntoa(*serv_list[0]));
+    strcat(serv_name, ":");
+    strcat(serv_name, argv[2]);
+    strcpy(this_srv->srv_name, serv_name);
     // set up this server's sockaddr_in
     serv_addr.sin_family = AF_INET;
 	memcpy(&serv_addr.sin_addr.s_addr, serv_list[0], he->h_length);
@@ -154,41 +200,43 @@ int main(int argc, char *argv[]){
 	strcpy(newChannel -> channelName, "Common");
 	newChannel -> subscribedNum = 0;
 	theChannels[channelIndex]= newChannel;
-	// Parse the variable length input (i=argc)
-    if (i > 3) {
-        if (((i-3)%2) != 0){
-            printf("number of command line server descripting arguments must be of even length\n");
+	// Parse the variable length input
+    if (argc > 3) {
+        if (((argc-3)%2) != 0) {
+            printf("usage: command line server descripting arguments must be of even length\n");
         }
-        else{
-            int s;
+        else {
             // iterate through the command line to find neighbor servers
-            for (s = 3; s < argc; s++){
-                char n_host_name[64];
+            printf("setting up further structure\n");
+            int s;
+            for (s = 3; s < argc; s++) {
+                char n_host_name[MAX_HOSTNAME];
                 strcpy(n_host_name, argv[s]);
                 if ((he = gethostbyname(n_host_name)) == NULL){
                     perror("server: error resolving hostname");
                 }
-                struct in_addr **n_serv_list;
-                n_serv_list = (struct in_addr**) he->h_addr_list;
+                serv_list = (struct in_addr**) he->h_addr_list;
                 // set up neighbor server's name
-                char n_srv_name[64];
-                strcat(n_srv_name, inet_ntoa(*n_serv_list[0]));
+                char n_srv_name[MAX_HOSTNAME+32];
+                strcat(n_srv_name, inet_ntoa(*serv_list[0]));
                 strcat(n_srv_name, ":");
                 strcat(n_srv_name, argv[s+1]);
                 aServer* n_server = (aServer*)malloc(sizeof(aServer));
-                strcpy(n_server -> srv_name, n_srv_name);
+                serverIndex++;
+                strcpy(n_server->srv_name, n_srv_name);
                 // set up neighbor server's port sockaddr_in
                 n_server->srv.sin_family = AF_INET;
                 n_server->srv.sin_port = htons(atoi(argv[s+1]));
-                memcpy(&n_server->srv.sin_addr.s_addr, n_serv_list[0], he->h_length);
-                // put it in theServers
+                memcpy(&n_server->srv.sin_addr.s_addr, serv_list[0], he->h_length);
+                // put it in theServers and theChannels[Common]->adjServers
                 theServers[s-3] = n_server;
-                // put it in theChannels[channelIndex], which is still 0
                 theChannels[channelIndex]->adjServers[s-3] = n_server;
+                //theChannels[channelIndex]->suscribedNum++; ???????????????????????????
             }
         }
     }
     channelIndex++;
+    //add timing for soft state...
     while(1){
 		bzero(buffer,256);
 		if((n = recvfrom(sockfd,buffer,255, 0,(struct sockaddr *)&cli_addr, &clilen)) > -1){
@@ -206,18 +254,20 @@ int main(int argc, char *argv[]){
                     newUser -> cli = cli_addr;
 					theUsers[userIndex] = newUser;
 					userIndex++;
+                    printf("%s <sending srv_name> recv login %s\n", this_srv->srv_name, newUser->username);
 					break;
 				}
 				case 1:{ //logout
 					printf("LOGOUT HANDLER\n");
 					aUser* logoutUser = findUser(&cli_addr);
+                    printf("%s <sending srv_name> recv logout %s\n", this_srv->srv_name, logoutUser->username);
 					int removeIndex = findIndexUsers(logoutUser);
 					int i;
 					// reindex theUsers[] for logoutUser removal
 					for(i = removeIndex; i < userIndex - 1; i++){
 						 theUsers[i] = theUsers[i + 1];
 					}
-                    userIndex --; // one less user exists
+                    userIndex--; // one less user exists
 					int a;
 					int b;
 					int c;
@@ -256,6 +306,7 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
 						break;
 					}
+                    printf("%s <sending srv_name> recv join %s\n", this_srv->srv_name, joinedUser->username);
 					for(i = 0; i < channelIndex; i++){
 						//check if the channel exists in theChannels (if not create one)
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){
@@ -297,6 +348,7 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
 						break;
 					}
+                    printf("%s <sending srv_name> recv leave %s\n", this_srv->srv_name, leaveUser->username);
 					char channel[32];
 					strcpy(channel,((request_leave*)buffer)-> req_channel);
 					int notFound = 1;	
@@ -355,6 +407,7 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
 						break;
 					}
+                    printf("%s <sending srv_name> recv say %s\n", this_srv->srv_name, userSaid->username);
 					printf("the user who is sending request is %s\n" , userSaid -> username);
 					memcpy(channel,((request_say*)buffer)-> req_channel, 32);
 					printf("the channel written to is before loop: %s\n", channel);
@@ -391,9 +444,11 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
 						break;
 					}
+                    printf("%s <sending srv_name> recv list %s\n", this_srv->srv_name, userList->username);
 					struct text_list *sendingList = (struct text_list *) malloc(sizeof(text_list) + sizeof(channel_info) * channelIndex);
 					sendingList->txt_type = TXT_LIST;
 					sendingList->txt_nchannels = channelIndex;
+					int i;
 					for(i = 0; i < channelIndex; i++){
 						strcpy(((sendingList->txt_channels)+i)->ch_channel, theChannels[i] -> channelName);
 						printf("channel to be listed %s\n", theChannels[i] -> channelName);
@@ -419,6 +474,7 @@ int main(int argc, char *argv[]){
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );			
 						break;
 					}
+                    printf("%s <sending srv_name> recv who %s\n", this_srv->srv_name, userWho->username);
 					int i;
 					for(i = 0; i < channelIndex ; i++){
 							if(strcmp(theChannels[i] -> channelName, whoChannel) == 0){
@@ -451,15 +507,62 @@ int main(int argc, char *argv[]){
 					break;	
 				}
 				case 7:{ //S2S join
-					printf("S2s join HANDLER\n");
+					printf("S2S JOIN HANDLER\n");
+                    char channel[32];
+                    strcpy(channel,((request_join*)buffer)->req_channel);
+                    int i;
+                    int channelExists = 0;
+                    text_error er;
+                    er.txt_type = TXT_ERROR;
+                    aServer* joinedServer = findServer(&cli_addr);
+                    if(joinedServer== NULL){ // a server that does not exist tries to join a channel
+                        strcpy(er.txt_error, "Server not connected, restart program");
+                        sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen);
+                        break;
+                    }
+                    printf("%s %s recv s2s_join\n", this_srv->srv_name, joinedServer->srv_name);
+                    for(i = 0; i < channelIndex; i++){
+                        //check if the channel exists in theChannels ...timing for soft state...
+                        if(strcmp(theChannels[i] -> channelName, channel) == 0){
+                            if(serverInChannel(joinedServer, theChannels[i])){
+                                channelExists = 1;
+                                strcpy(er.txt_error, "server is already on the channel");
+                                sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
+                                break;
+                            }
+                            printf("a channel that exists was found: %s\n", theChannels[i] -> channelName);
+                            theChannels[i]->adjServers[theChannels[i]->subscribedNum] = joinedServer;
+                            printf("server %s joined\n",theChannels[i]->adjServers[theChannels[i]->subscribedNum]->srv_name);
+                            //theChannels[i] -> subscribedNum += 1; ??????????????????
+                            //printf("total subscribed to this channel is %d\n", theChannels[i] -> subscribedNum);
+                            channelExists = 1;
+                            break;
+                        }
+                    }
+                    // channel does not exist create one + BROADCAST
+                    if(!channelExists){
+                        aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
+                        //newChannel -> channelName = {'\0'};
+                        strcpy(newChannel -> channelName, channel);
+                        newChannel -> adjServers[0] = joinedServer;
+                        printf("%s joined new channel, %s\n", joinedServer-> srv_name, channel);
+                        //newChannel -> subscribedNum = 1;
+                        theChannels[channelIndex]= newChannel;
+                        //BROADCAST
+                        broadcast_join_message(this_srv, newChannel);
+                        channelIndex++;
+                    }
+                    break;
 					
 				}
 				case 8:{ //S2S say
 					printf("S2s say HANDLER\n");
+                    printf("%s <sending srv_name> recv s2s_say\n", this_srv->srv_name);
 					
 				}
 				case 9:{ //S2S leave
 					printf("S2s leave HANDLER\n");
+                    printf("%s <sending srv_name> recv s2s_leave\n", this_srv->srv_name);
 					
 				}
 				default:{
