@@ -83,8 +83,6 @@ struct request_who {
         char req_channel[CHANNEL_MAX]; 
 } packed;
 
-
-
 struct request_keep_alive {
         request_t req_type; /* = REQ_KEEP_ALIVE */
 } packed;
@@ -98,8 +96,6 @@ struct request_s2s_leave {
         request_t req_type; /* = REQ_LEAVE */
         char req_channel[CHANNEL_MAX]; 
 } packed;
-
-
 
 struct request_s2s_say {
         request_t req_type; /* = REQ_SAY */
