@@ -142,7 +142,6 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
     struct request_s2s_join join_msg;
     join_msg.req_type = REQ_S2S_JOIN;
     strcpy(join_msg.req_channel, channel->channelName);
-    //if (server_iter == servers.end()) { cout << "no servers" << endl; }
     int i;
     for(i=0; i<serverIndex; i++){ // would this really be serverIndex? or some sort of adjserverIndex?
         if (channel->adjServers[i]->srv_name != origin_server->srv_name) { // might need to do strcmp
@@ -163,24 +162,20 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
 }
 
 void broadcast_say_message(aServer* origin_server, char* channel, char* message, char* username) {
-   printf("BROADCASTING SAY\n");
-
+    printf("BROADCASTING SAY\n");
 	struct request_s2s_say say_msg;
 	say_msg.req_type = REQ_S2S_SAY;
 	msg_nums[index_msg_num] = index_msg_num;
 	say_msg.uni_num = msg_nums[index_msg_num];
 	index_msg_num++;
-	strcpy( say_msg.req_channel,channel);
+	strcpy(say_msg.req_channel,channel);
 	strcpy(say_msg.req_text, message);
 	strcpy(say_msg.req_username, username);
- 
-    //if (server_iter == servers.end()) { cout << "no servers" << endl; }
     int i;
     for(i=0; i<serverIndex; i++){ // would this really be serverIndex? or some sort of adjserverIndex?
         if (theServers[i]->srv_name != origin_server->srv_name) { // might need to do strcmp
             //Broadcast
-
- 					if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(theServers[i]->srv), sizeof(theServers[0])) < 0 ) { // need to check if 0th server does not match this_srv
+            if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(theServers[i]->srv), sizeof(theServers[0])) < 0 ) { // need to check if 0th server does not match this_srv
                 	perror("Message failed");
             	}
             else {
@@ -193,11 +188,6 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
         }
     }
 }
-
-
-					
-				
-
 
 /*
  int cliLen = sizeof(theChannels[i]->subscribedClients[j]->cli);
@@ -401,6 +391,8 @@ int main(int argc, char *argv[]){
                         theChannels[channelIndex]= newChannel;
                         channelIndex++;
 					}
+                    //BROADCAST
+                    broadcast_join_message(this_srv, newChannel);
 					break;
 				}
 				case 3:{ //leave
@@ -594,11 +586,6 @@ int main(int argc, char *argv[]){
                     text_error er;
                     er.txt_type = TXT_ERROR;
                     aServer* joinedServer = findServer(&cli_addr);
-                    if(joinedServer== NULL){ // a server that does not exist tries to join a channel
-                        strcpy(er.txt_error, "Server not connected, restart program");
-                        sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen);
-                        break;
-                    }
                     printf("%s %s recv s2s_join\n", this_srv->srv_name, joinedServer->srv_name);
                     for(i = 0; i < channelIndex; i++){
                         //check if the channel exists in theChannels ...timing for soft state...
@@ -618,7 +605,7 @@ int main(int argc, char *argv[]){
                             break;
                         }
                     }
-                    // channel does not exist create one + BROADCAST
+                    //channel does not exist create one
                     if(!channelExists){
                         aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
                         //newChannel -> channelName = {'\0'};
@@ -627,13 +614,13 @@ int main(int argc, char *argv[]){
                         printf("%s joined new channel, %s\n", joinedServer->srv_name, channel);
                         //newChannel -> subscribedNum = 1;
                         theChannels[channelIndex]= newChannel;
-                        //BROADCAST
-                        broadcast_join_message(this_srv, newChannel);
                         channelIndex++;
                     }
+                    //BROADCAST
+                    broadcast_join_message(this_srv, newChannel);
                     break;
 				}
-				case 11:{ //S2S say //why 11?
+				case 11:{ //S2S say
 					printf("S2s say HANDLER\n");
                     printf("%s <sending srv_name> recv s2s_say\n", this_srv->srv_name);
 					
@@ -642,15 +629,6 @@ int main(int argc, char *argv[]){
 					char username[32]; 
 					int uniNum;
 					aServer* serverSaid = findServer(&cli_addr);
-					//text_error er;
-					//er.txt_type = TXT_ERROR;
-					/*(if(serverSaid == NULL){ // a Server that does not exist tries to join a channel
-						strcpy(er.txt_error, "You are not logged in, restart program");	
-						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
-						break;
-					}*/
-         
-
 					//printf("the user who is sending request is %s\n" , userSaid -> username);
 					memcpy(channel,((request_s2s_say*)buffer)-> req_channel, 32);
 					//printf("the channel written to is before loop: %s\n", channel);
@@ -694,12 +672,10 @@ int main(int argc, char *argv[]){
 					// send the s2s say
     				broadcast_say_message(this_srv, channel, message, username); // BROADCAST
 					break;
-
-
 				}
 				case 9:{ //S2S leave
 					printf("S2s leave HANDLER\n");
-               printf("%s <sending srv_name> recv s2s_leave\n", this_srv->srv_name);
+                    printf("%s <sending srv_name> recv s2s_leave\n", this_srv->srv_name);
 					aServer* serverLeave = findServer(&cli_addr);
 					char channel[32];
 					memcpy(channel,((request_s2s_leave*)buffer)-> req_channel, 32);
@@ -712,7 +688,6 @@ int main(int argc, char *argv[]){
 							}
 						}
 					}
-						
 				}
 				default:{
 					printf("Invalid packet was sent\n");
