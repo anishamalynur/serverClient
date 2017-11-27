@@ -248,6 +248,7 @@ int main(int argc, char *argv[]){
 	aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
 	strcpy(newChannel -> channelName, "Common");
 	newChannel -> subscribedNum = 0;
+    newChannel -> adjServersNum = 0;
 	theChannels[channelIndex]= newChannel;
 	// Parse the variable length input
     if (argc > 3) {
@@ -283,8 +284,10 @@ int main(int argc, char *argv[]){
                 memcpy(&n_server->srv.sin_addr.s_addr, serv_list[0], he->h_length);
                 // put it in theServers and theChannels[Common]->adjServers
                 printf("setting theServers and theChannels\n");
-                theServers[s-3] = n_server; // i think this might lead to gaps in the list because we increase s by 2 each time 
-                newChannel->adjServers[s-3] = n_server; 
+                theServers[serverIndex] = n_server; // i think this might lead to gaps in the list because we increase s by 2 each time
+                serverIndex++;
+                newChannel->adjServers[newChannel->adjServersNum] = n_server;
+                newChannel->adjServersNum++;
                 //theChannels[channelIndex]->suscribedNum++; ???????????????????????????
             }
         }
@@ -581,17 +584,17 @@ int main(int argc, char *argv[]){
 					printf("S2S JOIN HANDLER\n");
                     char channel[32];
                     strcpy(channel,((request_join*)buffer)->req_channel);
-                    int i;
                     int channelExists = 0;
-                    text_error er;
-                    er.txt_type = TXT_ERROR;
                     aServer* joinedServer = findServer(&cli_addr);
                     printf("%s %s recv s2s_join\n", this_srv->srv_name, joinedServer->srv_name);
+                    int i;
                     for(i = 0; i < channelIndex; i++){
                         //check if the channel exists in theChannels ...timing for soft state...
                         if(strcmp(theChannels[i]->channelName, channel) == 0){
                             if(serverInChannel(joinedServer, theChannels[i])){
                                 channelExists = 1;
+                                text_error er;
+                                er.txt_type = TXT_ERROR;
                                 strcpy(er.txt_error, "server is already on the channel");
                                 sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
                                 break;
@@ -641,13 +644,13 @@ int main(int argc, char *argv[]){
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){ //channel match
 							//iterate through subscribed users and send the message to eachone
 							if(uniNum == msg_nums[index_msg_num]){//duplicate message
-									//LEAVE
-									// find serverSaid in channels adjlist and remove
-									removeAdjServerReindex(serverSaid,theChannels[i]);
-									struct request_s2s_leave leave_msg;
-									leave_msg.req_type = REQ_S2S_LEAVE;
-									strcpy(leave_msg.req_channel, channel);
-									if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
+                                //LEAVE
+                                // find serverSaid in channels adjlist and remove
+                                removeAdjServerReindex(serverSaid,theChannels[i]);
+                                struct request_s2s_leave leave_msg;
+                                leave_msg.req_type = REQ_S2S_LEAVE;
+                                strcpy(leave_msg.req_channel, channel);
+                                if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
                                     printf("ERROR writing to socket\n");
                                 }
 							}
