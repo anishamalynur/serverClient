@@ -65,7 +65,7 @@ int isSame(sockaddr_in ad1, sockaddr_in ad2){
 aUser* findUser(sockaddr_in* client){
 	int i;
 	for(i = 0; i < userIndex; i++){
-		if(theUsers[i] -> cli.sin_addr.s_addr == client->sin_addr.s_addr && theUsers[i]->cli.sin_port == client->sin_port){
+		if(isSame(theUsers[i]->cli, *client)){
 			//printf( "found user!! %s\n", theUsers[i] -> username);
 			return theUsers[i];
 		}
@@ -76,7 +76,7 @@ aUser* findUser(sockaddr_in* client){
 aServer* findServer(sockaddr_in* server){
     int i;
     for(i = 0; i < serverIndex; i++){
-        if(theServers[i] ->srv.sin_addr.s_addr == server->sin_addr.s_addr && theServers[i]->srv.sin_port == server->sin_port){
+        if(isSame(theServers[i]->srv, *server)){
             //printf( "found server!! %s\n", theServers[i]->srv.srv_name);
             return theServers[i];
         }
@@ -95,7 +95,7 @@ int findIndexUsers(aUser* user){
 }
 
 void removeChannelReindex(aChannel* removeCh, int removeIndex){
-	if (removeCh -> subscribedNum == 0){
+	if(removeCh -> subscribedNum == 0){
 			int i;
 		for(i = removeIndex; i < channelIndex; i++){
 			theChannels[i] = theChannels[i+1];
@@ -107,12 +107,12 @@ void removeChannelReindex(aChannel* removeCh, int removeIndex){
 
 void removeAdjServerReindex(aServer* removeSrv, aChannel* ch){ //need to test this function!!
 	int i;
-	for( i = 0; i < ch ->adjServersNum; i++){
-		if(strcmp(removeSrv-> srv_name, ch->adjServers[i]->srv_name)==0){
-				int j;
-				for(j = i; j < ch ->adjServersNum; j++){
-					ch->adjServers[j] = ch->adjServers[j +1];
-				}
+	for(i = 0; i < ch->adjServersNum; i++){
+		if(isSame(removeSrv->srv, ch->adjServers[i]->srv)){
+            int j;
+            for(j = i; j < ch ->adjServersNum; j++){
+                ch->adjServers[j] = ch->adjServers[j +1];
+            }
 		}
 	}
 }
@@ -144,7 +144,7 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
     strcpy(join_msg.req_channel, channel->channelName);
     int i;
     for(i=0; i<serverIndex; i++){ // would this really be serverIndex? or some sort of adjserverIndex?
-        if (channel->adjServers[i]->srv_name != origin_server->srv_name) { // might need to do strcmp
+        if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
             printf("Forwarding to neighbor %s\n", channel->adjServers[i]->srv_name);
             if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i])) < 0 ) {
@@ -173,7 +173,7 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
 	strcpy(say_msg.req_username, username);
     int i;
     for(i=0; i<serverIndex; i++){ // would this really be serverIndex? or some sort of adjserverIndex?
-        if (theServers[i]->srv_name != origin_server->srv_name) { // might need to do strcmp
+        if (!isSame(theServers[i]->srv, origin_server->srv)) {
             //Broadcast
             if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(theServers[i]->srv), sizeof(theServers[0])) < 0 ) { // need to check if 0th server does not match this_srv
                 	perror("Message failed");
