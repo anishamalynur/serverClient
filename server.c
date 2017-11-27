@@ -141,13 +141,13 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
     printf("BROADCASTING\n");
     struct request_s2s_join join_msg;
     join_msg.req_type = REQ_S2S_JOIN;
-    strcpy(join_msg.req_channel, channel->channelName);
+    strcpy(join_msg.req_channel, channel->channelName); // another for loop to iterate through the channels to find a channel that matches input channel MAYBENOT
     int i;
-    for(i=0; i<serverIndex; i++){ // would this really be serverIndex? or some sort of adjserverIndex?
+    for(i=0; i< channel -> adjServersNum; i++){ // would this really be serverIndex? or some sort of adjserverIndex?
         if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
             printf("Forwarding to neighbor %s\n", channel->adjServers[i]->srv_name);
-            if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i])) < 0 ) {
+            if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
                 perror("Message failed");
             }
             else {
@@ -249,7 +249,7 @@ int main(int argc, char *argv[]){
 	strcpy(newChannel -> channelName, "Common");
 	newChannel -> subscribedNum = 0;
     newChannel -> adjServersNum = 0;
-	theChannels[channelIndex]= newChannel;
+	
 	// Parse the variable length input
     if (argc > 3) {
         if (((argc-3)%2) != 0) {
@@ -292,6 +292,7 @@ int main(int argc, char *argv[]){
             }
         }
     }
+	theChannels[channelIndex]= newChannel;
     channelIndex++;
     //add timing for soft state...
     while(1){
@@ -583,7 +584,7 @@ int main(int argc, char *argv[]){
 				case 8:{ //S2S join
 					printf("S2S JOIN HANDLER\n");
                     char channel[32];
-                    strcpy(channel,((request_join*)buffer)->req_channel);
+                    strcpy(channel,((request_s2s_join*)buffer)->req_channel);
                     int channelExists = 0;
                     aServer* joinedServer = findServer(&cli_addr);
                     printf("%s %s recv s2s_join\n", this_srv->srv_name, joinedServer->srv_name);
