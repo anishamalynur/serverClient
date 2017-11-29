@@ -146,8 +146,9 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
     printf("BROADCASTING\n");
     struct request_s2s_join join_msg;
     join_msg.req_type = REQ_S2S_JOIN;
-    strcpy(join_msg.req_channel, channel->channelName); // another for loop to iterate through the channels to find a channel that matches input channel MAYBENOT
-    int i;
+    strcpy(join_msg.req_channel, channel->channelName);
+    int i, f;
+    f=0;
     for(i=0; i< channel->adjServersNum; i++){
         if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
@@ -156,14 +157,13 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
                 perror("Message failed");
             }
             else {
-                printf("%s <receiving srv_name> send s2s_join %s\n", origin_server->srv_name, channel->channelName);
+                printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServer[i]->srv_name, channel->channelName);
+                f=1;
             }
         }
-        else {
-            //No forward back to sender
-            printf("No where to forward\n");
-        }
     }
+    if (f) printf("worked\n");
+    else printf("Nowhere to forward\n");
 }
 
 void broadcast_say_message(aServer* origin_server, aChannel* channel, char* message, char* username) {
@@ -366,7 +366,7 @@ int main(int argc, char *argv[]){
 					}
                     printf("%s recv join %s\n", this_srv->srv_name, joinedUser->username);
 					for(i = 0; i < channelIndex; i++){
-						//check if the channel exists in theChannels (if not create one)
+						//check if the channel exists in theChannels
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){
 							if(userInChannel(joinedUser, theChannels[i])){
 								channelExists = 1;
@@ -375,15 +375,15 @@ int main(int argc, char *argv[]){
 								break;
 							} 
 							printf("a channel that exists was found: %s\n", theChannels[i] -> channelName);
-							theChannels[i] -> subscribedClients[theChannels[i] -> subscribedNum] = joinedUser;
-                            printf("user %s joined \n",theChannels[i] -> subscribedClients[theChannels[i] -> subscribedNum] -> username);
+							theChannels[i]->subscribedClients[theChannels[i]->subscribedNum] = joinedUser;
+                            printf("user %s joined \n", theChannels[i]-> subscribedClients[theChannels[i]->subscribedNum]->username);
 							theChannels[i] -> subscribedNum += 1;
 							printf("total subscribed to this channel is %d\n", theChannels[i] -> subscribedNum); 
 							channelExists = 1;
 							break;
 						}
 					}
-					// channel does not exist create one	
+					// channel does not exist create one + BROADCAST
 					if(!channelExists){					
                         aChannel* newChannel = (aChannel*)malloc(sizeof(aChannel));
                         //newChannel -> channelName = {'\0'};
@@ -391,12 +391,10 @@ int main(int argc, char *argv[]){
                         newChannel -> subscribedClients[0] = joinedUser;
                         printf("%s joined new channel, %s\n", joinedUser->username, channel);
                         newChannel -> subscribedNum = 1;
-                        broadcast_join_message(this_srv, newChannel); // BROADCAST
                         theChannels[channelIndex]= newChannel;
                         channelIndex++;
 					}
-                    //BROADCAST
-                    broadcast_join_message(this_srv, newChannel);
+                    broadcast_join_message(this_srv, newChannel); // BROADCAST
 					break;
 				}
 				case 3:{ //leave
@@ -494,7 +492,7 @@ int main(int argc, char *argv[]){
 						}
 					}
 					// send the s2s say
-//                    broadcast_say_message(this_srv, channel, message, userSaid ->username); // BROADCAST
+                    broadcast_say_message(this_srv, channel, message, userSaid->username); // BROADCAST
 					/*struct request_s2s_say say_msg;
     				say_msg.req_type = REQ_S2S_SAY;
 					msg_nums[index_msg_nums] = index_msg_nums;
