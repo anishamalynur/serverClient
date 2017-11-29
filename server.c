@@ -77,7 +77,7 @@ aServer* createServerFromCLI_ADDR(sockaddr_in srv_addr){
     aServer* new_server = (aServer*)malloc(sizeof(aServer));
     new_server->srv = srv_addr;
     char n_srv_name[MAX_HOSTNAME+32];
-    inet_ntop(AF_INET, &(srv_addr.sin_addr), n_srv_name, MAX_HOSTNAME+32);
+    inet_ntop(AF_INET, &(srv_addr.sin_addr.s_addr), n_srv_name, MAX_HOSTNAME+32);
     strcat(n_srv_name, ":");
     char n_srv_port[32];
     inet_ntop(AF_INET, &(srv_addr.sin_port), n_srv_port, 32);
@@ -403,7 +403,7 @@ int main(int argc, char *argv[]){
 					printf("LEAVE HANDLER\n");
 					text_error er;
                     er.txt_type = TXT_ERROR;
-					aUser* leaveUser = findUser(&cli_addr);;
+					aUser* leaveUser = findUser(&cli_addr);
 					if(leaveUser == NULL){ // a user that does not exist tries to join a channel
 						strcpy(er.txt_error, "You are not logged in, restart program");	
 						sendto(sockfd,&er, sizeof(er), 0,(struct sockaddr *)&cli_addr, clilen );
@@ -627,7 +627,7 @@ int main(int argc, char *argv[]){
                     }
                     break;
 				}
-				case 11:{ //S2S say
+				/*case 11:{ //S2S say
 					printf("S2S SAY HANDLER\n");
 					char channel[32];
 					char message[64];
@@ -694,7 +694,7 @@ int main(int argc, char *argv[]){
 							}
 						}
 					}
-				}
+				}*/
 				default:{
 					printf("Invalid packet was sent\n");
 				}

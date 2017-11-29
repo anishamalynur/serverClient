@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 #uncomment the topolgy you want. The simple two-server topology is uncommented here.
 
