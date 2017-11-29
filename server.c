@@ -73,6 +73,17 @@ aUser* findUser(sockaddr_in* client){
 	return NULL;	
 }
 
+aServer* findServer(sockaddr_in* client){
+    int i;
+    for(i = 0; i < serverIndex; i++){
+        if(isSame(theServers[i]->srv, *client)){
+            printf("found server!! %s\n", theServers[i] -> srv_name);
+            return theServers[i];
+        }
+    }
+    return NULL;
+}
+
 aServer* createServerFromCLI_ADDR(sockaddr_in srv_addr){
     aServer* new_server = (aServer*)malloc(sizeof(aServer));
     new_server->srv = srv_addr;
@@ -143,7 +154,7 @@ int serverInChannel(aServer* checkServer, aChannel* channel){
 }
 
 void broadcast_join_message(aServer* origin_server, aChannel* channel) {
-    printf("BROADCASTING\n");
+    printf("BROADCASTING JOIN\n");
     struct request_s2s_join join_msg;
     join_msg.req_type = REQ_S2S_JOIN;
     strcpy(join_msg.req_channel, channel->channelName);
@@ -157,7 +168,7 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
                 perror("Message failed");
             }
             else {
-                printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServer[i]->srv_name, channel->channelName);
+                printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
                 f=1;
             }
         }
@@ -273,9 +284,11 @@ int main(int argc, char *argv[]){
                 serv_list = (struct in_addr**) he->h_addr_list;
                 // set up neighbor server's name
                 char n_srv_name[MAX_HOSTNAME+32];
-                inet_ntop(AF_INET, serv_list[0], serv_name, MAX_HOSTNAME+32);
+                //inet_ntop(AF_INET, &(srv_addr.sin_addr.s_addr), n_srv_name, MAX_HOSTNAME+32);
+                inet_ntop(AF_INET, serv_list[0], n_srv_name, MAX_HOSTNAME+32);
                 strcat(n_srv_name, ":");
                 strcat(n_srv_name, argv[s+1]);
+                printf("'created' %s\n", n_srv_name);
                 aServer* n_server = (aServer*)malloc(sizeof(aServer));
                 strcpy(n_server->srv_name, n_srv_name);
                 // set up neighbor server's port sockaddr_in
@@ -492,7 +505,7 @@ int main(int argc, char *argv[]){
 						}
 					}
 					// send the s2s say
-                    broadcast_say_message(this_srv, channel, message, userSaid->username); // BROADCAST
+                    //broadcast_say_message(this_srv, channel, message, userSaid->username); // BROADCAST
 					/*struct request_s2s_say say_msg;
     				say_msg.req_type = REQ_S2S_SAY;
 					msg_nums[index_msg_nums] = index_msg_nums;
@@ -584,7 +597,7 @@ int main(int argc, char *argv[]){
                     char channel[32];
                     strcpy(channel,((request_s2s_join*)buffer)->req_channel);
                     int channelExists = 0;
-                    aServer* joinedServer = createServerFromCLI_ADDR(cli_addr);
+                    aServer* joinedServer = findServer(&cli_addr);
                     // need to understand what the cli_addr is
                     printf("%s %s recv s2s_join on %s\n", this_srv->srv_name, joinedServer->srv_name, channel);
                     int i;
