@@ -138,10 +138,12 @@ void removeAdjServerReindex(aServer* removeSrv, aChannel* ch){ //need to test th
 	int i;
 	for(i = 0; i < ch->adjServersNum; i++){
 		if(isSame(removeSrv->srv, ch->adjServers[i]->srv)){
+				printf("found a matching srv in remove adjserverReindex\n");
             int j;
             for(j = i; j < ch ->adjServersNum; j++){
                 ch->adjServers[j] = ch->adjServers[j +1];
             }
+				ch -> adjServersNum -= 1;
 		}
 	}
 }
@@ -227,7 +229,17 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
     if (f) printf("Broadcasted SAY!\n");
     else{
 		printf("Nowhere to forward SAY\n");
-		
+		if(chan->subscribedNum == 0 && chan->adjServersNum == 1){
+		 //removeAdjServerReindex(origin_server,chan);
+		 struct request_s2s_leave leave_msg;
+		 leave_msg.req_type = REQ_S2S_LEAVE;
+		 strcpy(leave_msg.req_channel, chan->channelName);
+		 int n;
+		 if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&origin_server->srv, sizeof(origin_server->srv) ) < -1)){
+		     printf("ERROR writing to socket\n");
+		 }
+		}
+
 	} 
 }
 
@@ -709,8 +721,7 @@ int main(int argc, char *argv[]){
 					
 					int i;
 	
-					memcpy(msg_nums[index_msg_num], uniNum, 8);
-					index_msg_num++;
+
 					
 					for(i = 0; i < channelIndex; i++){
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){ //channel match
@@ -720,7 +731,7 @@ int main(int argc, char *argv[]){
 							else{*/
 
 								int a;
-
+								printf("the number of index_msg_num %d", index_msg_num);
 								for(a = 0; a < index_msg_num; a ++){
 										if(strcmp(uniNum, msg_nums[a])==0){
 								                //LEAVE
@@ -735,6 +746,9 @@ int main(int argc, char *argv[]){
 													break;
 										}
 									}
+
+								memcpy(msg_nums[index_msg_num], uniNum, 8);
+								index_msg_num++;
                             int j;
 									 fprintf(stderr, "i got here\n");
                             printf("the number users on this channel is %d\n",theChannels[i] -> subscribedNum );
