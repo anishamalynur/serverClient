@@ -208,17 +208,17 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
             if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&origin_server->srv, sizeof(origin_server->srv) ) < -1)){
                 printf("ERROR writing to socket\n");
             }
-            printf("%s %s send s2s_leave on %s\n", this_srv->srv_name, chan->adjServers[i]->srv_name]->srv_name, chan->channelName);
+            printf("%s %s send s2s_leave on %s\n", this_srv->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
 		}
 	} 
 }
 
-void signal_handler(int num) {
+/*void signal_handler(int num) {
     // handle the logic for soft state
     // send a s2s_join every 60 seconds
     // remove servers that haven't sent you a join in more than 120 seconds
     //alarm(60);
-}
+}*/
 
 //////////////////////////////////////////  MAIN FUNCTION  //////////////////////////////////////////
 
@@ -647,6 +647,7 @@ int main(int argc, char *argv[]){
 					char message[64];
 					char username[32]; 
 					char uniNum[8];
+					int inLeave = 0;
 					aServer* serverSaid = findServer(&cli_addr);
 					//fprintf(stderr, "the user who is sending request is %s\n", userSaid -> username);
 					memcpy(channel,((request_s2s_say*)buffer)-> req_channel, 32);
@@ -672,13 +673,15 @@ int main(int argc, char *argv[]){
                                     struct request_s2s_leave leave_msg;
                                     leave_msg.req_type = REQ_S2S_LEAVE;
                                     strcpy(leave_msg.req_channel, channel);
-                                    if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
+                                    if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&cli_addr, clilen ) < -1)){
                                         printf("ERROR writing to socket\n");
                                     }
                                     printf("%s %s send s2s_leave on %s\n", this_srv->srv_name, serverSaid->srv_name, channel);
+												inLeave = 1;
                                     break;
                                 }
                             }
+								if(!inLeave){
                             memcpy(msg_nums[index_msg_num], uniNum, 8);
                             index_msg_num++;
                             int j;
@@ -694,11 +697,12 @@ int main(int argc, char *argv[]){
                                     printf("ERROR writing to socket\n");
                                 }
 							}
-						//}
 						}
 					}
+					}
 					// send the s2s say
-                    broadcast_say_message(serverSaid, channel, message, username); // BROADCAST
+					if(!inLeave){
+                    broadcast_say_message(serverSaid, channel, message, username);} // BROADCAST
                     /*if(!f){
                     printf("nowhere to forward in say 2s2\n");
                     struct request_s2s_leave leave_msg;
@@ -722,6 +726,7 @@ int main(int argc, char *argv[]){
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){ //channel match
 							if(theChannels[i] -> adjServersNum <= 1){ //&& theChannels[i] -> subscribedNum == 0?? << why is this needed?
 							removeAdjServerReindex(serverLeave,theChannels[i]);
+							printf("a\n");
 							}
 						}
 					}
