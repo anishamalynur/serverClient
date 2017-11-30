@@ -163,7 +163,7 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
     f=0;
 	printf("adj server num is %d\n", channel-> adjServersNum);
     for(i=0; i< channel->adjServersNum; i++){
-        if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
+       // if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
             printf("Forwarding to neighbor %s\n", channel->adjServers[i]->srv_name);
             if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
@@ -173,7 +173,7 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
                 printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
                 f=1;
             }
-        }
+       // }
     }
     if (f) printf("worked\n");
     else printf("Nowhere to forward\n");
@@ -189,7 +189,7 @@ for(i = 0; i < channelIndex; i++){
 }
 
 
-void broadcast_say_message(aServer* origin_server, char* channel, char* message, char* username) {
+void broadcast_say_message(sockaddr_in origin_server, char* channel, char* message, char* username) {
     printf("BROADCASTING SAY\n");
 	struct request_s2s_say say_msg;
 	say_msg.req_type = REQ_S2S_SAY;
@@ -203,14 +203,14 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
     int i;
 	int f= 0;
     for(i=0; i<chan->adjServersNum; i++){
-        if (!isSame(chan->adjServers[i]->srv, origin_server->srv)) {
+        if (!isSame(chan->adjServers[i]->srv, origin_server)) {
             //Broadcast
             if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(chan->adjServers[i]->srv), sizeof(chan->adjServers[i]->srv)) < 0 ) { // need to check if 0th server does not match this_srv
                 	perror("Message failed");
             	}
             else {
 						f=1;
-                 printf("%s %s send s2s_say on %s\n", origin_server->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
+                // printf("%s %s send s2s_say on %s\n", origin_server->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
             }
         }
 
@@ -508,17 +508,17 @@ int main(int argc, char *argv[]){
 					printf("the message written: %s\n", message);
 					int i;
 					printf("opening file\n");
-					//FILE* fp = NULL;
-					// = fopen("~/Documents/Networking/serverClient/dev/urandom", "r");
+					FILE* fp;
+					 fp = fopen("/dev/urandom", "r");
 					//if(NULL ==(fp = fopen("/dev/urandom","r"))){
-					//printf("it failed");
+					fprintf(stderr, "it failed");
 					//
 					//fp = fopen("Makefile", "r");
 					printf("gothere");
 					char* uniChar= {'\0'};
 					
 					
-				 	//fread(uniChar, 1, 8, fp);
+				 	fread(&uniChar, 1, 8, fp);
 					msg_nums[index_msg_num] = uniChar;
 					index_msg_num ++;
 					printf("done with file\n");
@@ -542,7 +542,7 @@ int main(int argc, char *argv[]){
 					}
 					// send the s2s say
 						printf("about to broadcast say\n");
-                    broadcast_say_message(this_srv, channel, message, userSaid->username); // BROADCAST
+                    broadcast_say_message(cli_addr, channel, message, userSaid->username); // BROADCAST
 					/*struct request_s2s_say say_msg;
     				say_msg.req_type = REQ_S2S_SAY;
 					msg_nums[index_msg_nums] = index_msg_nums;
@@ -738,7 +738,7 @@ int main(int argc, char *argv[]){
 						}
 					}
 					// send the s2s say
-                    broadcast_say_message(this_srv, channel, message, username); // BROADCAST
+                    broadcast_say_message(cli_addr, channel, message, username); // BROADCAST
 					break;
 				}
 				case 9:{ //S2S leave
