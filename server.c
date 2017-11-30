@@ -173,9 +173,11 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
     printf("BROADCASTING SAY\n");
 	struct request_s2s_say say_msg;
 	say_msg.req_type = REQ_S2S_SAY;
+	//long long uni[8] = {'\0'};
 	char uni[8] = {'\0'};
 	memcpy(uni, msg_nums[index_msg_num-1], 8);
-	strcpy(say_msg.uni_num, uni);
+	memcpy(say_msg.uni_num, uni, 8);
+		//strcpy(say_msg.uni_num, uni);
 	strcpy(say_msg.req_channel,channel);
 	strcpy(say_msg.req_text, message);
 	strcpy(say_msg.req_username, username);
@@ -487,8 +489,20 @@ int main(int argc, char *argv[]){
 					memcpy(channel,((request_say*)buffer)-> req_channel, 32);
 					memcpy(message,((request_say*)buffer)-> req_text, 64);
                     printf("%s recv say on %s from %s: %s\n", this_srv->srv_name, channel, userSaid-> username, message);
+					//long long uniChar[16];
 					unsigned char uniChar[16];
-					uuid_generate(uniChar);	
+					//uuid_generate(uniChar);	
+					FILE* fp;
+			
+					fp = fopen("/dev/urandom", "r");
+					if (fp== NULL){
+
+						fprintf(stderr, "opening URANDOM failed");
+						return 0;
+					}
+					fprintf(stderr, "opening urandom was successful)");
+					fread(&uniChar, 1, 8, fp);
+					//close(fp);
 					//fprintf(stderr, "uniCHAR AFTER GENERATE %s\n", uniChar);
 					memcpy(msg_nums[index_msg_num], uniChar, 8);
 					index_msg_num ++;
@@ -654,7 +668,7 @@ int main(int argc, char *argv[]){
 					memcpy(message,((request_s2s_say*)buffer)-> req_text, 64);
 					memcpy(username,((request_s2s_say*)buffer)-> req_username, 32);
 					memcpy( uniNum,((request_s2s_say*)buffer)-> uni_num,8);
-                    fprintf(stderr, "%s %s recv s2s_say on %s: %s\n", this_srv->srv_name, serverSaid->srv_name, channel, message);
+               fprintf(stderr, "%s %s recv s2s_say on %s: %s\n", this_srv->srv_name, serverSaid->srv_name, channel, message);
 					fprintf(stderr, "the uniNum is %s\n", uniNum);
 					int i;
 					for(i = 0; i < channelIndex; i++){
@@ -664,9 +678,10 @@ int main(int argc, char *argv[]){
 							}
 							else{*/
                             int a;
-                            //printf("the number of index_msg_num %d", index_msg_num);
+                            printf("the number of index_msg_num %d", index_msg_num);
                             for(a = 0; a < index_msg_num; a ++){
-                                if(strcmp(uniNum, msg_nums[a])==0){
+                                if(strncmp(uniNum, msg_nums[a],8)==0){
+											//if(uniNum == msg_nums[a]){
                                     //LEAVE
                                     // find serverSaid in channels adjlist and remove
                                     removeAdjServerReindex(serverSaid,theChannels[a]);
