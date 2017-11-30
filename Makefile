@@ -1,6 +1,6 @@
 CC=g++
 
-CFLAGS=-Wall -W -g -Werror
+CFLAGS=-Wall -W -g -Werror -luuid
 
 
 

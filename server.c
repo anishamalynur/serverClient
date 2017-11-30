@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <uuid/uuid.h>
 #include "duckchat.h"
 #include "raw.h"
 
@@ -50,7 +51,7 @@ int serverIndex = 0;
 
 int sockfd;
 aServer *this_srv; 
-char* msg_nums[MAX_MESSAGE]; //keep track of unique message number identifiers
+char msg_nums[MAX_MESSAGE][8]; //keep track of unique message number identifiers
 int index_msg_num = 0; //what msg_num program is on^
 
 
@@ -174,28 +175,34 @@ void broadcast_join_message(aServer* origin_server, aChannel* channel) {
     f=0;
     //printf("adj server num is %d\n", channel-> adjServersNum);
     for(i=0; i< channel->adjServersNum; i++){
-        if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
+        //if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
             //printf("Forwarding to neighbor %s\n", channel->adjServers[i]->srv_name);
             if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
                 perror("Message failed");
             }
             else {
-                printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
+                printf("%s %s send s2s_join on %s\n", this_srv->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
+					printf("FALSE INFO %s\n", origin_server->srv_name);
                 f=1;
             }
-        }
+        //}
     }
     if (f) printf("Broadcasted Join!\n");
-    else printf("Nowhere to forward\n");
+    else printf("Nowhere to forward Join\n");
 }
 
-void broadcast_say_message(sockaddr_in origin_server, char* channel, char* message, char* username) {
+void broadcast_say_message(aServer* origin_server, char* channel, char* message, char* username) {
     printf("BROADCASTING SAY\n");
 	struct request_s2s_say say_msg;
 	say_msg.req_type = REQ_S2S_SAY;
 	//msg_nums[index_msg_num] = index_msg_num;
-	say_msg.uni_num = msg_nums[index_msg_num];
+	char uni[8] = {'\0'};
+	memcpy(uni, msg_nums[index_msg_num-1], 8);
+	//fprintf(stderr, "uni %s\n", msg_nums[index_msg_num-1]);
+	
+	strcpy(say_msg.uni_num, uni);
+	//fprintf(stderr, "uni %s\n", say_msg.uni_num );
 	//index_msg_num++;
 	strcpy(say_msg.req_channel,channel);
 	strcpy(say_msg.req_text, message);
@@ -203,21 +210,25 @@ void broadcast_say_message(sockaddr_in origin_server, char* channel, char* messa
 	aChannel* chan = findChannel(channel);
     int i;
 	int f= 0;
+ 	printf("adj server num is %d\n", chan-> adjServersNum);
     for(i=0; i<chan->adjServersNum; i++){
-        if (!isSame(chan->adjServers[i]->srv, origin_server)) {
+        if (!isSame(chan->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
             if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(chan->adjServers[i]->srv), sizeof(chan->adjServers[i]->srv)) < 0 ) { // need to check if 0th server does not match this_srv
                 	perror("Message failed");
             	}
             else {
                 f=1;
-                // printf("%s %s send s2s_say on %s\n", origin_server->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
+                 printf("%s %s send s2s_say on %s\n", this_srv->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
             }
         }
 
     }
-    if (f) printf("worked\n");
-    else printf("Nowhere to forward\n");
+    if (f) printf("Broadcasted SAY!\n");
+    else{
+		printf("Nowhere to forward SAY\n");
+		
+	} 
 }
 
 /*
@@ -268,6 +279,7 @@ int main(int argc, char *argv[]){
 	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
 		perror("server: can’t bind local address");
 	}
+
     // initialize the unique message ids array with false numbers
     //int m;
     //for (m = 0; m < MAX_MESSAGE; m++){
@@ -503,18 +515,19 @@ int main(int argc, char *argv[]){
 					memcpy(message,((request_say*)buffer)-> req_text, 64);
                     printf("%s recv say on %s from %s: %s\n", this_srv->srv_name, channel, userSaid-> username, message);
 					printf("opening file\n");
-					FILE* fp;
-					 fp = fopen("/dev/urandom", "r");
+					//FILE* fp;
+					 //fp = fopen("/dev/urandom", "r");
 					//if(NULL ==(fp = fopen("/dev/urandom","r"))){
 					fprintf(stderr, "it failed");
 					//
 					//fp = fopen("Makefile", "r");
-					printf("gothere");
-					char* uniChar= {'\0'};
+					//printf("gothere");
+					unsigned char uniChar[16];
+					uuid_generate(uniChar);	
+					fprintf(stderr, "uniCHAR AFTER GENERATE %s\n", uniChar);				
 					
-					
-				 	fread(&uniChar, 1, 8, fp);
-					msg_nums[index_msg_num] = uniChar;
+				 	//fread(&uniChar, 1, 8, fp);
+					memcpy(msg_nums[index_msg_num], uniChar, 8);
 					index_msg_num ++;
 					printf("done with file\n");
                     int i;
@@ -538,7 +551,7 @@ int main(int argc, char *argv[]){
 					}
 					// send the s2s say
                     printf("about to broadcast say\n");
-                    broadcast_say_message(cli_addr, channel, message, userSaid->username); // BROADCAST
+                    broadcast_say_message(this_srv, channel, message, userSaid->username); // BROADCAST
 					/*
                     struct request_s2s_say say_msg;
     				say_msg.req_type = REQ_S2S_SAY;
@@ -681,38 +694,49 @@ int main(int argc, char *argv[]){
 					char channel[32];
 					char message[64];
 					char username[32]; 
-					char* uniNum;
+					char uniNum[8];
 					aServer* serverSaid = findServer(&cli_addr);
-					//printf("the user who is sending request is %s\n" , userSaid -> username);
+					//fprintf(stderr, "the user who is sending request is %s\n" , userSaid -> username);
 					memcpy(channel,((request_s2s_say*)buffer)-> req_channel, 32);
-                    printf("%s %s recv s2s_say on %s\n", this_srv->srv_name, serverSaid->srv_name, channel);
-					//printf("the channel written to is before loop: %s\n", channel);
+               fprintf(stderr, "%s %s recv s2s_say on %s\n", this_srv->srv_name, serverSaid->srv_name, channel);
+					fprintf(stderr, "the channel written to is before loop: %s\n", channel);
 					memcpy(message,((request_s2s_say*)buffer)-> req_text, 64);
 					memcpy(username,((request_s2s_say*)buffer)-> req_username, 32);
-					uniNum = ((request_s2s_say*)buffer)-> uni_num;
-					//printf("the message written: %s\n", message);
+					memcpy( uniNum,((request_s2s_say*)buffer)-> uni_num,8);
+					fprintf(stderr, "the uniNum is %s\n", uniNum);
+					//uniNum = ;
+					fprintf(stderr, "the message written: %s\n", message);
 					
 					int i;
-					for(i = 0; i < index_msg_num; i ++){
-						if(strcmp(uniNum, msg_nums[i])){
-                            //LEAVE
-                            // find serverSaid in channels adjlist and remove
-                            removeAdjServerReindex(serverSaid,theChannels[i]);
-                            struct request_s2s_leave leave_msg;
-                            leave_msg.req_type = REQ_S2S_LEAVE;
-                            strcpy(leave_msg.req_channel, channel);
-                            if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
-                                printf("ERROR writing to socket\n");
-                            }
-						}
-					}
+	
+					memcpy(msg_nums[index_msg_num], uniNum, 8);
+					index_msg_num++;
+					
 					for(i = 0; i < channelIndex; i++){
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){ //channel match
 							//iterate through subscribed users and send the message to eachone
 							/*if(uniNum == msg_nums[index_msg_num]){//duplicate message
 							}
 							else{*/
+
+								int a;
+
+								for(a = 0; a < index_msg_num; a ++){
+										if(strcmp(uniNum, msg_nums[a])==0){
+								                //LEAVE
+								                // find serverSaid in channels adjlist and remove
+								                removeAdjServerReindex(serverSaid,theChannels[a]);
+								                struct request_s2s_leave leave_msg;
+								                leave_msg.req_type = REQ_S2S_LEAVE;
+								                strcpy(leave_msg.req_channel, channel);
+								                if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
+								                    printf("ERROR writing to socket\n");
+								                }
+													break;
+										}
+									}
                             int j;
+									 fprintf(stderr, "i got here\n");
                             printf("the number users on this channel is %d\n",theChannels[i] -> subscribedNum );
                             for(j = 0; j< (theChannels[i] -> subscribedNum); j++){
                                 text_say sendingSay;
@@ -729,7 +753,18 @@ int main(int argc, char *argv[]){
 						}
 					}
 					// send the s2s say
-                    broadcast_say_message(cli_addr, channel, message, username); // BROADCAST
+                   broadcast_say_message(serverSaid, channel, message, username); // BROADCAST
+						  /*if(!f){
+							printf("nowhere to forward in say 2s2\n");
+							
+                     struct request_s2s_leave leave_msg;
+                     leave_msg.req_type = REQ_S2S_LEAVE;
+                     strcpy(leave_msg.req_channel, channel);
+                     if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
+                            printf("ERROR writing to socket\n");
+                            }
+
+						}*/
 					break;
 				}
 				case 9:{ //S2S leave
@@ -747,6 +782,7 @@ int main(int argc, char *argv[]){
 							}
 						}
 					}
+					break;
 				}
 				default:{
 					printf("Invalid packet was sent\n");

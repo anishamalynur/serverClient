@@ -99,7 +99,7 @@ struct request_s2s_leave {
 
 struct request_s2s_say {
         request_t req_type; /* = REQ_SAY */
-		  char* uni_num;
+		  char uni_num[8];
         char req_channel[CHANNEL_MAX];
 		  char req_username[USERNAME_MAX]; 
         char req_text[SAY_MAX];
