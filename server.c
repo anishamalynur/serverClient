@@ -358,7 +358,7 @@ int main(int argc, char *argv[]){
 								}
 								// if the channel has 0 users it gets freed
 								theChannels[a] -> subscribedNum -= 1;
-								removeChannelReindex(theChannels[a], a);
+								//removeChannelReindex(theChannels[a], a);
 								break;					
 							}
 						}
@@ -453,7 +453,7 @@ int main(int argc, char *argv[]){
 									}
 									// if the channel has 0 users it gets freed
 									theChannels[a] -> subscribedNum -= 1;
-									removeChannelReindex(theChannels[a], a);
+									//removeChannelReindex(theChannels[a], a);
 									break;				
 								}
 							}
