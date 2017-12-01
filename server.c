@@ -156,7 +156,7 @@ void broadcast_join_message(aChannel* channel) {
     int i, f;
     f=0;
     for(i=0; i< channel->adjServersNum; i++){
-        // Naieve Broadcast
+        // Naive Broadcast
         if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
             perror("Message failed");
         }
@@ -177,7 +177,7 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
 	char uni[8] = {'\0'};
 	memcpy(uni, msg_nums[index_msg_num-1], 8);
 	memcpy(say_msg.uni_num, uni, 8);
-		//strcpy(say_msg.uni_num, uni);
+    //strcpy(say_msg.uni_num, uni);
 	strcpy(say_msg.req_channel,channel);
 	strcpy(say_msg.req_text, message);
 	strcpy(say_msg.req_username, username);
@@ -189,12 +189,12 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
         if (!isSame(chan->adjServers[i]->srv, origin_server->srv)) {
             //Broadcast
             if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(chan->adjServers[i]->srv), sizeof(chan->adjServers[i]->srv)) < 0 ) {
-                    // need to check if 0th server does not match this_srv
-                	perror("Message failed");
-            	}
+                // need to check if 0th server does not match this_srv
+                perror("Message failed");
+            }
             else {
                 f=1;
-                 printf("%s %s send s2s_say on %s\n", this_srv->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
+                printf("%s %s send s2s_say on %s\n", this_srv->srv_name, chan->adjServers[i]->srv_name, chan->channelName);
             }
         }
     }
@@ -654,7 +654,6 @@ int main(int argc, char *argv[]){
                     }
                     break;
 				}
-
 				case 11:{ //S2S say
 					printf("S2S SAY HANDLER\n");
 					char channel[32];
@@ -668,7 +667,7 @@ int main(int argc, char *argv[]){
 					memcpy(message,((request_s2s_say*)buffer)-> req_text, 64);
 					memcpy(username,((request_s2s_say*)buffer)-> req_username, 32);
 					memcpy( uniNum,((request_s2s_say*)buffer)-> uni_num,8);
-               fprintf(stderr, "%s %s recv s2s_say on %s: %s\n", this_srv->srv_name, serverSaid->srv_name, channel, message);
+                    fprintf(stderr, "%s %s recv s2s_say on %s: %s\n", this_srv->srv_name, serverSaid->srv_name, channel, message);
 					fprintf(stderr, "the uniNum is %s\n", uniNum);
 					int i;
 					for(i = 0; i < channelIndex; i++){
@@ -696,24 +695,24 @@ int main(int argc, char *argv[]){
                                     break;
                                 }
                             }
-								if(!inLeave){
-                            memcpy(msg_nums[index_msg_num], uniNum, 8);
-                            index_msg_num++;
-                            int j;
-                            printf("the number users on this channel is %d\n",theChannels[i] -> subscribedNum );
-                            for(j = 0; j< (theChannels[i] -> subscribedNum); j++){
-                                text_say sendingSay;
-                                sendingSay.txt_type = 0;
-                                strcpy(sendingSay.txt_channel, channel);
-                                strcpy(sendingSay.txt_username, username);
-                                strcpy(sendingSay.txt_text, message);
-                                int cliLen = sizeof(theChannels[i]->subscribedClients[j]->cli);
-                                if((n= sendto(sockfd,&sendingSay, sizeof(sendingSay), 0,(struct sockaddr *)&theChannels[i]->subscribedClients[j]->cli, cliLen ) < -1)){
-                                    printf("ERROR writing to socket\n");
+                            if(!inLeave){
+                                memcpy(msg_nums[index_msg_num], uniNum, 8);
+                                index_msg_num++;
+                                int j;
+                                printf("the number users on this channel is %d\n",theChannels[i] -> subscribedNum );
+                                for(j = 0; j< (theChannels[i] -> subscribedNum); j++){
+                                    text_say sendingSay;
+                                    sendingSay.txt_type = 0;
+                                    strcpy(sendingSay.txt_channel, channel);
+                                    strcpy(sendingSay.txt_username, username);
+                                    strcpy(sendingSay.txt_text, message);
+                                    int cliLen = sizeof(theChannels[i]->subscribedClients[j]->cli);
+                                    if((n= sendto(sockfd,&sendingSay, sizeof(sendingSay), 0,(struct sockaddr *)&theChannels[i]->subscribedClients[j]->cli, cliLen ) < -1)){
+                                        printf("ERROR writing to socket\n");
+                                    }
                                 }
-							}
-						}
-					}
+                            }
+                        }
 					}
 					// send the s2s say
 					if(!inLeave){
