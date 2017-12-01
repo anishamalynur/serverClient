@@ -679,7 +679,7 @@ int main(int argc, char *argv[]){
                         }
                         newChannel -> adjServersNum = i;
                         // add this_srv (not joinedServer) to the channel
-                        newChannel->adjServers[theChannels[i]->adjServersNum] = joinedServer;
+                        newChannel->adjServers[newChannel->adjServersNum] = joinedServer;
                         //printf("%s joined new channel, %s\n", joinedServer->srv_name, channel);
                         //theChannels[i]->adjServers[theChannels[i]->adjServersNum] = this_srv;
                         printf("%s joined new channel, %s\n", this_srv->srv_name, channel);
