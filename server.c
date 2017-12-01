@@ -156,6 +156,7 @@ void broadcast_join_message(aChannel* channel) {
     int i, f;
     f=0;
     for(i=0; i< channel->adjServersNum; i++){
+		if (!isSame(channel->adjServers[i]->srv, this_srv->srv)) {
         // Naive Broadcast
         if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
             perror("Message failed");
@@ -164,10 +165,36 @@ void broadcast_join_message(aChannel* channel) {
             f=1;
             printf("%s %s send s2s_join on %s\n", this_srv->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
         }
+		}
     }
     if (f) printf("Broadcasted Join!\n");
     else printf("Nowhere to forward Join\n");
 }
+//old broadcast
+/*void broadcast_join_message(aServer* origin_server, aChannel* channel) {
+    printf("BROADCASTING JOIN\n");
+    struct request_s2s_join join_msg;
+    join_msg.req_type = REQ_S2S_JOIN;
+    strcpy(join_msg.req_channel, channel->channelName);
+    int i, f;
+    f=0;
+	printf("adj server num is %d\n", channel-> adjServersNum);
+    for(i=0; i< channel->adjServersNum; i++){
+        if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
+            //Broadcast
+            printf("Forwarding to neighbor %s\n", channel->adjServers[i]->srv_name);
+            if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
+                perror("Message failed");
+            }
+            else {
+                printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
+                f=1;
+            }
+        }
+    }
+    if (f) printf("worked\n");
+    else printf("Nowhere to forward\n");
+}*/
 
 void broadcast_say_message(aServer* origin_server, char* channel, char* message, char* username) {
     printf("BROADCASTING SAY\n");
