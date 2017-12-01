@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <uuid/uuid.h>
+#include <signal.h>
 #include "duckchat.h"
 #include "raw.h"
 
@@ -21,6 +22,8 @@
 #define MAX_SERVER 1000
 #define MAX_MESSAGE 1000
 #define MAX_HOSTNAME 100
+
+int evenNum = 0;
 
 struct aServer{
     char srv_name[MAX_HOSTNAME+32]; //keep track of ip:port
@@ -171,31 +174,7 @@ void broadcast_join_message(aChannel* channel) {
     if (f) printf("Broadcasted Join!\n");
     else printf("Nowhere to forward Join\n");
 }
-//old broadcast
-/*void broadcast_join_message(aServer* origin_server, aChannel* channel) {
-    printf("BROADCASTING JOIN\n");
-    struct request_s2s_join join_msg;
-    join_msg.req_type = REQ_S2S_JOIN;
-    strcpy(join_msg.req_channel, channel->channelName);
-    int i, f;
-    f=0;
-	printf("adj server num is %d\n", channel-> adjServersNum);
-    for(i=0; i< channel->adjServersNum; i++){
-        if (!isSame(channel->adjServers[i]->srv, origin_server->srv)) {
-            // Naive Broadcast
-            printf("Forwarding to neighbor %s\n", channel->adjServers[i]->srv_name);
-            if (sendto(sockfd, &join_msg, sizeof(join_msg), 0, (struct sockaddr*)&(channel->adjServers[i]->srv), sizeof(channel->adjServers[i]->srv)) < 0 ) {
-                perror("Message failed");
-            }
-            else {
-                printf("%s %s send s2s_join on %s\n", origin_server->srv_name, channel->adjServers[i]->srv_name, channel->channelName);
-                f=1;
-            }
-        }
-    }
-    if (f) printf("worked\n");
-    else printf("Nowhere to forward\n");
-}*/
+
 
 void broadcast_say_message(aServer* origin_server, char* channel, char* message, char* username) {
     printf("BROADCASTING SAY\n");
@@ -243,12 +222,26 @@ void broadcast_say_message(aServer* origin_server, char* channel, char* message,
 	} 
 }
 
-/*void signal_handler(int num) {
+//SOFT STATE
+void signal_handler(int num) {
+	fprintf(stderr, "IN SOFT STATE JOIN\n");
+	num += 1;
     // handle the logic for soft state
     // send a s2s_join every 60 seconds
+	 int i;
+	for(i = 0; i < channelIndex; i++){
+		broadcast_join_message(theChannels[i]);
+	}
+   alarm(60);
     // remove servers that haven't sent you a join in more than 120 seconds
-    //alarm(60);
-}*/
+    evenNum = !evenNum;
+	//THIS IS HOW WE WOULD IMPLEMENT THE SOFT JOIN FOR REMOVING A SERVER IF IT HASN'T RESPONDED IN 2 MINUTES
+	/* if (evenNum) {
+			check if the servers are live
+			if not live, prune that server
+			set all servers to dead
+		} */
+}
 
 //////////////////////////////////////////  MAIN FUNCTION  //////////////////////////////////////////
 
@@ -336,10 +329,10 @@ int main(int argc, char *argv[]){
 	theChannels[channelIndex]= newChannel;
     channelIndex++;
     //add timing for soft state...
-    /*
-    signal(SIGALRM, signal_handler(1));
-    alarm(60;)
-     */
+    
+    signal(SIGALRM, signal_handler);
+    alarm(60);
+     
     while(1){
 		bzero(buffer,256);
 		if((n = recvfrom(sockfd,buffer,255, 0,(struct sockaddr *)&cli_addr, &clilen)) > -1){
@@ -557,18 +550,7 @@ int main(int argc, char *argv[]){
 					// send the s2s say
                     printf("about to broadcast say\n");
                     broadcast_say_message(this_srv, channel, message, userSaid->username); // BROADCAST
-					/*
-                    struct request_s2s_say say_msg;
-    				say_msg.req_type = REQ_S2S_SAY;
-					msg_nums[index_msg_nums] = index_msg_nums;
-					say_msg.uni_num = msg_nums[index_msg_num];
-					index_msg_num++;
-					strcpy( say_msg.req_channel,channel);
-					strcpy(say_msg.req_text, message);
-					strcpy(say_msg.req_username, userSaid -> username);
-					if (sendto(sockfd, &say_msg, sizeof(say_msg), 0, (struct sockaddr*)&(theServers[0]->srv), sizeof(theServers[0])) < 0 ) { // need to check if 0th server does not match this_srv
-                        perror("Message failed");
-                    }*/
+
 					break;
 				}
                 case 5:{ //list
@@ -706,19 +688,22 @@ int main(int argc, char *argv[]){
 					fprintf(stderr, "the uniNum is %s\n", uniNum);
 					int i;
 					for(i = 0; i < channelIndex; i++){
+						
 						if(strcmp(theChannels[i] -> channelName, channel) == 0){ //channel match
 							//iterate through subscribed users and send the message to eachone
 							/*if(uniNum == msg_nums[index_msg_num]){//duplicate message
 							}
 							else{*/
                             int a;
-                            printf("the number of index_msg_num %d", index_msg_num);
+                   
                             for(a = 0; a < index_msg_num; a ++){
+											
                                 if(strncmp(uniNum, msg_nums[a],8)==0){
 											//if(uniNum == msg_nums[a]){
                                     //LEAVE
                                     // find serverSaid in channels adjlist and remove
-                                    removeAdjServerReindex(serverSaid,theChannels[a]);
+                                    //removeAdjServerReindex(serverSaid,theChannels[i]);
+												fprintf(stderr, "got through adj server for value a= %d\n", a);
                                     struct request_s2s_leave leave_msg;
                                     leave_msg.req_type = REQ_S2S_LEAVE;
                                     strcpy(leave_msg.req_channel, channel);
@@ -752,15 +737,7 @@ int main(int argc, char *argv[]){
 					// send the s2s say
 					if(!inLeave){
                     broadcast_say_message(serverSaid, channel, message, username);} // BROADCAST
-                    /*if(!f){
-                    printf("nowhere to forward in say 2s2\n");
-                    struct request_s2s_leave leave_msg;
-                    leave_msg.req_type = REQ_S2S_LEAVE;
-                    strcpy(leave_msg.req_channel, channel);
-                    if((n= sendto(sockfd,&leave_msg, sizeof(leave_msg), 0,(struct sockaddr *)&serverSaid->srv, sizeof(serverSaid->srv) ) < -1)){
-                        printf("ERROR writing to socket\n");
-                    }
-                    }*/
+
 					break;
 				}
 				case 9:{ //S2S leave
@@ -791,18 +768,4 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
-/*aServer* createServerFromCLI_ADDR(sockaddr_in srv_addr){
- aServer* new_server = (aServer*)malloc(sizeof(aServer));
- new_server->srv = srv_addr;
- char n_srv_name[MAX_HOSTNAME+32];
- inet_ntop(AF_INET, &(srv_addr.sin_addr.s_addr), n_srv_name, MAX_HOSTNAME+32);
- strcat(n_srv_name, ":");
- char n_srv_port[32];
- inet_ntop(AF_INET, &(srv_addr.sin_port), n_srv_port, 32);
- strcat(n_srv_name, n_srv_port);
- strcpy(new_server->srv_name, n_srv_name);
- printf("created server %s\n", new_server->srv_name);
- theServers[serverIndex] = new_server;
- serverIndex++;
- return new_server;
- }*/
+
